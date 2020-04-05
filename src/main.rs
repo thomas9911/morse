@@ -16,15 +16,21 @@ fn main() {
     let mut sink = Sink::new(&device);
     sink.set_volume(VOLUME);
 
-    if let Some(text) = collect_arguments() {
-        sink = add_bleeps(sink, &text, true);
+    if let Some((text, print_bleeps)) = collect_arguments() {
+        sink = match add_bleeps(sink, &text, print_bleeps) {
+            Ok(x) => x,
+            Err(x) => return println!("{}", x),
+        };
 
         sink.sleep_until_end();
     }
 }
 
-fn add_bleeps(sink: Sink, input: &str, print_bleeps: bool) -> Sink {
-    let t: MorseString = input.try_into().unwrap();
+fn add_bleeps(sink: Sink, input: &str, print_bleeps: bool) -> Result<Sink, &str> {
+    let t: MorseString = match input.try_into() {
+        Ok(x) => x,
+        Err(e) => return Err(e),
+    };
 
     if print_bleeps {
         println!("{}", t.print_morse());
@@ -40,7 +46,7 @@ fn add_bleeps(sink: Sink, input: &str, print_bleeps: bool) -> Sink {
     }
 
     sink.append(blank());
-    sink
+    Ok(sink)
 }
 
 fn blank() -> rodio::source::TakeDuration<Zero<f32>> {
@@ -51,18 +57,17 @@ fn beep(n: u64) -> rodio::source::TakeDuration<SineWave> {
     SineWave::new(FREQUENCY).take_duration(Duration::from_millis(n * TICK_LENGTH))
 }
 
-fn collect_arguments() -> Option<String> {
+fn collect_arguments() -> Option<(String, bool)> {
+    let mut print_morse = false;
     let mut args = std::env::args();
     args.next().unwrap();
 
-    let first_arg = args.next();
+    let mut first_arg = fetch_first_argument(&mut args)?;
 
-    if first_arg.is_none() {
-        print_help();
-        return None;
+    if ["--print", "-p"].contains(&first_arg.as_ref()) {
+        print_morse = true;
+        first_arg = fetch_first_argument(&mut args)?;
     }
-
-    let first_arg = first_arg.unwrap();
 
     if ["-h", "--help", "help"].contains(&first_arg.as_ref()) {
         print_help();
@@ -73,20 +78,32 @@ fn collect_arguments() -> Option<String> {
 
     text.extend(args);
 
-    Some(text.join(" "))
+    Some((text.join(" "), print_morse))
+}
+
+fn fetch_first_argument(args: &mut std::env::Args) -> Option<String> {
+    match args.next() {
+        None => {
+            print_help();
+            None
+        }
+        Some(x) => Some(x),
+    }
 }
 
 fn print_help() {
     println!(
-        "print and plays morse code.
+        "Plays and prints morse code.
     
-    morse [ARGS]
+Usage: morse [OPTIONS] [ARGS ..]
 
-    ARGS:
-        help    prints help
-
-        ARGS    prints and plays the ARGS as morse code
-
+OPTIONS:
+    --help -h       prints help
+    --print -p      also print the ARGS as morse code
+    
+ARGS:
+    help            prints help
+    ARGS            plays the ARGS as morse code
     "
     );
 }

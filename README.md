@@ -18,5 +18,7 @@ morse --help
 morse sos
 ```
 
-
-
+Also print the morse code:
+```sh
+morse --print sos
+```
